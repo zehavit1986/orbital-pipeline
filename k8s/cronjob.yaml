@@ -1,0 +1,59 @@
+# The daily pipeline run. Correctness does not depend on any setting here: the pipeline itself is
+# idempotent and takes a lock, because `kubectl create job --from=cronjob/...` bypasses
+# concurrencyPolicy and a preemptible node can kill a pod at any moment.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: orbital-pipeline
+  namespace: orbital
+spec:
+  schedule: "0 6 * * *"          # daily, after the vendor publishes the previous day
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid       # don't start a scheduled run while one is going
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 6               # a killed or failed pod is replaced by a new one
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: orbital-pipeline
+        spec:
+          restartPolicy: Never
+          terminationGracePeriodSeconds: 30
+          containers:
+            - name: pipeline
+              image: orbital-pipeline:1.0
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - configMapRef:
+                    name: orbital-pipeline-config
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef: {name: orbital-secrets, key: postgres-password}
+                - name: BILLING_API_CLIENT_SECRET
+                  valueFrom:
+                    secretKeyRef: {name: orbital-secrets, key: billing-api-client-secret}
+              volumeMounts:
+                - name: commitments
+                  mountPath: /data/commitments
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+              securityContext:
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+          volumes:
+            # The Finance workbooks. `run.py up` creates this ConfigMap from data/commitments/.
+            - name: commitments
+              configMap:
+                name: orbital-commitments

@@ -1,0 +1,32 @@
+# Configuration and credentials for the pipeline and Postgres.
+#
+# The Secret holds local-development values so that `python run.py up` works from a fresh clone.
+# In a real cluster it would not live in git: it would come from a secret manager (for example
+# External Secrets Operator reading from Vault / AWS Secrets Manager).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbital-pipeline-config
+  namespace: orbital
+data:
+  BILLING_API_URL: "http://billing-api.orbital.svc.cluster.local:8765"
+  BILLING_API_CLIENT_ID: "candidate"
+  COMMITMENTS_DIR: "/data/commitments"
+  USAGE_START_DATE: "2026-01-01"
+  USAGE_LOOKBACK_DAYS: "35"
+  LOCK_WAIT_SECONDS: "900"
+  # Standard libpq variables, read directly by the Postgres driver.
+  PGHOST: "postgres.orbital.svc.cluster.local"
+  PGPORT: "5432"
+  PGDATABASE: "orbital"
+  PGUSER: "orbital"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orbital-secrets
+  namespace: orbital
+type: Opaque
+stringData:
+  postgres-password: "orbital-local-dev"
+  billing-api-client-secret: "orbital-s3cret"

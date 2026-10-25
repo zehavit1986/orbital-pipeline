@@ -8,6 +8,7 @@ Safe to run at any time, as often as you like:
 """
 
 import logging
+import signal
 import sys
 
 from . import db
@@ -33,7 +34,7 @@ def run() -> None:
             details["usage"] = load_usage(conn, client, settings.usage_start_date, settings.lookback_days)
             details["commitments"] = load_commitments(conn, settings.commitments_dir)
             details["model"] = build_and_publish(conn)
-        except Exception as exc:
+        except BaseException as exc:  # includes SystemExit from SIGTERM
             details["error"] = repr(exc)
             db.finish_run(conn, run_id, "failed", details)
             raise
@@ -41,9 +42,18 @@ def run() -> None:
         log.info("Pipeline run %d succeeded", run_id)
 
 
+def _exit_on_sigterm(signum, frame):
+    raise SystemExit(f"Received signal {signum}, stopping")
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, stream=sys.stdout,
                         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
+    # Kubernetes sends SIGTERM before it kills a pod. As PID 1 in the container, Python would
+    # ignore it; turning it into an exception rolls back the open transaction and releases the
+    # lock straight away, instead of waiting for the SIGKILL. (A SIGKILL is fine too: Postgres
+    # then rolls back and releases the lock when the connection drops.)
+    signal.signal(signal.SIGTERM, _exit_on_sigterm)
     try:
         run()
     except Exception:

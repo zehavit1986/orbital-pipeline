@@ -1,0 +1,84 @@
+# Postgres for the pipeline: a single-replica StatefulSet with a PersistentVolumeClaim, so the
+# data survives pod restarts. (kind provides a default StorageClass for the PVC.)
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: orbital
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: postgres
+      port: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: orbital
+  labels:
+    app.kubernetes.io/name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          args:
+            # Notice dead clients (e.g. a pipeline pod on a preempted node) within ~25s, so their
+            # transaction is rolled back and their advisory lock is released.
+            - "-c"
+            - "tcp_keepalives_idle=10"
+            - "-c"
+            - "tcp_keepalives_interval=5"
+            - "-c"
+            - "tcp_keepalives_count=3"
+            - "-c"
+            - "idle_in_transaction_session_timeout=600000"
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef: {name: orbital-pipeline-config, key: PGDATABASE}
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef: {name: orbital-pipeline-config, key: PGUSER}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: orbital-secrets, key: postgres-password}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: postgres
+              containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
