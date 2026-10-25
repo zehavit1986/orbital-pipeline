@@ -92,8 +92,34 @@ workbook whose total commitment changed by more than X% between snapshots.
 
 ## How I used AI tools
 
-<!-- Zehavit: rewrite this in your own words so it matches what you actually did. -->
 I used Claude as a pair programmer: to go through the brief and the data and list the traps,
 to discuss the storage choice, to draft the code, manifests and these notes, and to write an
 independent reference calculation in plain Python that I compared against the pipeline's
-output. I reviewed and tested every part myself and can explain each decision.
+output. 
+I reviewed and tested every part myself and can explain each decision.
+
+While you will run in the Terminal: python scripts/grading_scenario.py
+grading_scenario.py will print at the end “All steps passed”
+
+The full summary of how I worked with it (the design discussion, the decisions and trade-offs, and my interview-prep notes) is available here: https://claude.ai/artifact/RzsaFKJHhMBRKs4iWkR34K
+
+
+What's on the page now:
+
+The two sources (the API and the Excel files), the three steps inside the pipeline pod, the tables in Postgres, and where the results go. The numbers in it come from your cluster.
+
+The flow, step by step. 
+Each step lists the file it lives in, what it does, and a real example from your data:
+  1.The second run fetched 1,080 records and changed 0. That's your proof that a repeated run changes nothing.
+  2.K-1009 was amended from $500K to $650K, and its end date was pushed out.
+  3.K-1004 was removed from the Excel file but is still counted.
+  4.C004 and C010 have spend on days with no active contract.
+The results. A table of the 4 at-risk contracts.
+The four detailed diagrams from before.
+
+Points:
+K-1001 has two versions only because the customer name changed (from "Acme Robotics" to "ACME Robotics Inc."). The history tracks every column, including name and status. This is a deliberate choice, and the page shows how to defend it.
+
+The passwords in git are dev values. That's fine for a local assignment, but say up front that production would use Vault or External Secrets.
+
+
