@@ -29,8 +29,13 @@ ORDER BY snapshot_date
 
 # Layout
 
-1.docker build -t orbital-billing-api:1.0 mock_api → ENTRYPOINT ["python", "server.py"]
-2.docker build -t orbital-pipeline:1.0 pipeline → ENTRYPOINT ["python", "-m", "orbital_pipeline"]
+There are 2 Images:
+mock_api/k8s/billing-api.yaml
+  1.docker build -t orbital-billing-api:1.0 mock_api 
+    → ENTRYPOINT ["python", "server.py"]
+k8s/cronjob.yaml
+  2.docker build -t orbital-pipeline:1.0 pipeline 
+    → ENTRYPOINT ["python", "-m", "orbital_pipeline"]
 
 ```
 run.py                       "up" - create the cluster and deploy everything.  
@@ -125,6 +130,10 @@ clone.
 
 ## When Finance changes the workbook layout again
 
+- `_find_contract_table` locates the contracts table by content, not position: it scans every
+  sheet's first 30 rows for a header with all required columns. If it finds none, or more than
+  one sheet matches, it raises `WorkbookLayoutError` with the headers it did find, so the run
+  fails before anything is written.
 - Reordered or extra columns, new title rows, a renamed sheet: handled.
 - A renamed *required* column or an unparseable value: the run **fails before writing anything**,
   with an error listing the headers it found. The published tables stay as they are. That failure
